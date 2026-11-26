@@ -1,0 +1,28 @@
+{
+  "name": "beeper-autoreply-web",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && tsc --noEmit",
+    "test": "node --test --experimental-strip-types lib/*.test.ts"
+  },
+  "dependencies": {
+    "next": "^16.4.6",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.11",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.6",
+    "typescript": "^6.0.3"
+  }
+}
