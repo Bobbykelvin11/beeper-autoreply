@@ -1,2 +1,94 @@
-# beeper-autoreply
-AI auto-reply bot for Beeper (WhatsApp, Telegram…): approve-before-send or fully automatic. Oracle free VM worker + iPhone PWA control page on Vercel.
+# Beeper Auto-Reply
+
+An AI bot that keeps your conversations going and replies to your messages on WhatsApp, Telegram and the other apps Beeper connects. It runs 24/7 on a free cloud server, and you control it from your iPhone with a web page you add to your Home Screen.
+
+**Two modes, per chat or as the default:**
+
+- **Approve before send** (default): the AI writes a draft. You tap **Send**, **Edit** or **Reject** on the control page, or answer in your Beeper **Note to self** chat (`ok ab12`, `no ab12`, `edit ab12 new text`).
+- **Fully automatic**: the reply goes out by itself after a human-like delay, within rate limits.
+
+```
+ iPhone (Safari PWA)                  Vercel (web/)                     Oracle Always Free VM
+┌──────────────────┐  HTTPS   ┌─────────────────────────┐  HTTPS  ┌─────────────────────────────────┐
+│ Control page     │ ───────▶ │ Next.js page + /api/vm  │ ──────▶ │ cloudflared quick tunnel        │
+│ on/off, chats,   │  cookie  │ proxy (secret kept in   │ bearer  │   └▶ server/ worker :8787       │
+│ modes, approvals │          │ an encrypted cookie)    │         │        ├ Beeper Server :23374   │
+└──────────────────┘          └─────────────────────────┘         │        │  (WhatsApp, Telegram…) │
+        ▲                              ▲  encrypted URL           │        └ AI: Ollama / Groq / …  │
+        │  Note to self commands       └──── ntfy.sh ◀────────────┘  (tunnel URL rendezvous)      │
+        └─────────────── Beeper app ◀─────────────────────────────────────────────────────────────┘
+```
+
+| Folder | What it is |
+| --- | --- |
+| [`server/`](server) | Node/TypeScript worker. It connects to the local Beeper Server (Desktop API + WebSocket), applies the allowlist, quiet hours, delays and rate limits, asks an OpenAI-compatible AI for a reply, and keeps drafts and logs. It also exposes a small authenticated control API. |
+| [`web/`](web) | Next.js control page for Vercel. It's password protected, installable as a PWA, and proxies to the VM. |
+| [`setup/`](setup) | [`cloud-init.sh`](setup/cloud-init.sh) is a one-shot VM installer. [`README-phone.md`](setup/README-phone.md) has step-by-step instructions you can follow on an iPhone. |
+
+## How it works
+
+1. **Beeper Server** is Beeper's official headless app (installed with the [`beeper` CLI](https://github.com/beeper/cli)). It runs on the VM, so WhatsApp and Telegram connect to it directly as an *on-device* connection. Chats you set up as on-device on your iPhone are **not** visible to the server, so connect the networks again on the server from the Link tab.
+2. The worker subscribes to `ws://127.0.0.1:23374/v1/ws` for `message.upserted` events. For each incoming text message in an **allowed** chat it does the following:
+   - waits a few seconds for follow-up messages;
+   - fetches the last N messages for context;
+   - builds a prompt from your persona and style plus any per-chat instructions;
+   - creates a draft or schedules an automatic send.
+   If you reply by hand, anything queued for that chat is cancelled. The AI can answer `[[SKIP]]` for messages that need the real you, such as money, plans or anything sensitive; then you get a notice instead of a reply.
+3. **Reaching the server:** a Cloudflare quick tunnel needs no account, but its URL changes when the VM restarts.
+   - The worker publishes the current URL to an ntfy.sh topic. Both the topic name and the AES-256-GCM key are derived from your access key, so ntfy only sees ciphertext.
+   - The control page looks the URL up with the same key, so you never copy URLs around.
+   - Alternative: Tailscale Funnel gives a fixed URL. Set `TUNNEL="tailscale"` in the script.
+4. **Linking Beeper:** you type your Beeper email, then the emailed code, into the control page. Then you confirm the new "device" by matching emoji in the Beeper app on your iPhone, or with your recovery code. Passwords are never needed or stored. The Beeper access token stays on the VM (`/var/lib/beeper-autoreply/secrets.json`, mode 600).
+
+## AI providers (all OpenAI-compatible)
+
+| Provider | Cost | Notes |
+| --- | --- | --- |
+| Ollama on the VM (default when `INSTALL_OLLAMA="yes"`) | free, open source | `qwen2.5:3b` runs on the free ARM VM; slower, private |
+| [Groq](https://console.groq.com/keys) | free tier | fast; e.g. `openai/gpt-oss-120b` |
+| [OpenRouter](https://openrouter.ai/keys) | free models | `…:free` models |
+| [Gemini](https://aistudio.google.com/apikey) | free tier | base URL `https://generativelanguage.googleapis.com/v1beta/openai` |
+
+API keys are typed into the control page's Settings and stored only on your VM. The page only ever shows the last 4 characters.
+
+## Safety and account-ban risk
+
+WhatsApp bans "auto-messaging" and bulk messaging, and Meta (Instagram/Messenger) bans automated access. Beeper says heavy sending can get accounts suspended by the networks. This bot is for **personal, low-volume** use. To lower the risk:
+
+- nothing is allowed until you allow it chat by chat;
+- the default mode is approve-before-send;
+- automatic replies wait 20–90 s and are capped per chat and per hour;
+- quiet hours are available.
+
+Use automatic mode at your own risk.
+
+## Development
+
+```bash
+cd server && npm ci && npm run lint && npm test   # unit + engine + API tests
+node scripts/mock-beeper.mjs                      # fake Beeper Server + fake AI for local runs
+CONTROL_SECRET=dev-secret-123456 BEEPER_BASE_URL=http://127.0.0.1:23999 AI_BASE_URL=http://127.0.0.1:23998/v1 NTFY_URL=off npm start
+
+cd web && npm ci && npm run lint && npm test && npm run build
+SESSION_KEY=dev-session-key-0123456789 VM_URL=http://127.0.0.1:8787 npm run dev
+```
+
+### Deploying the control page to Vercel
+
+Import this repo in Vercel with **Root Directory = `web`**, and set `SESSION_KEY` to a random 32+ character string. You can leave `VM_URL` empty for the quick-tunnel rendezvous, or set it to a fixed Tailscale/Cloudflare URL. No database is needed.
+
+### Control API (VM, `Authorization: Bearer <CONTROL_SECRET>`)
+
+```
+GET  /api/ping (no auth)                GET  /api/status
+GET|PUT /api/settings                   GET  /api/chats[?refresh=1]     PUT /api/chats/:id {allowed,mode,instructions}
+GET  /api/drafts[?all=1]                POST /api/drafts/:id/send {text?}   POST /api/drafts/:id/reject
+GET  /api/logs                          POST /api/test-ai {text}
+GET  /api/link/state                    POST /api/link/email {email}    POST /api/link/code {setupRequestID,code[,username,acceptTerms]}
+POST /api/link/verify                   POST /api/link/verify/:id/(accept|sas.start|sas.confirm|cancel)
+POST /api/link/recovery-key {recoveryKey}
+GET  /api/accounts  GET /api/bridges    GET /api/bridges/:id/flows      POST /api/bridges/:id/login {flowID?}
+GET  /api/bridges/:id/login/:sid        POST /api/bridges/:id/login/:sid/steps/:step {type,fields}   DELETE /api/bridges/:id/login/:sid
+```
+
+MIT licensed. Not affiliated with Beeper or Automattic.
