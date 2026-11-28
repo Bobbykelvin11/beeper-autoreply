@@ -67,7 +67,8 @@ export function SettingsView({ onSignOut }: { onSignOut: () => void }) {
         </div>
         <label className="field"><span>Base URL (OpenAI-compatible)</span><input value={s.provider.baseURL} onChange={e => set(x => ({ ...x, provider: { ...x.provider, baseURL: e.target.value } }))} /></label>
         <label className="field"><span>Model</span><input value={s.provider.model} onChange={e => set(x => ({ ...x, provider: { ...x.provider, model: e.target.value } }))} /></label>
-        <label className="field"><span>API key (stored only on your server)</span><input type="password" placeholder="not needed for Ollama" value={s.provider.apiKey} onChange={e => set(x => ({ ...x, provider: { ...x.provider, apiKey: e.target.value } }))} /></label>
+        <label className="field"><span>API key (stored only on your server)</span><input type="password" placeholder="paste a free Groq key from console.groq.com/keys" value={s.provider.apiKey} onChange={e => set(x => ({ ...x, provider: { ...x.provider, apiKey: e.target.value } }))} /></label>
+        <p className="muted small">A 1 GB VM cannot run Ollama. The Groq preset is the default: get a free key at console.groq.com/keys and paste it here. After you save, this page only shows the last 4 characters. The key never leaves your server.</p>
         <Row label="Creativity"><input type="number" step={0.1} min={0} max={1.5} value={s.provider.temperature} onChange={e => set(x => ({ ...x, provider: { ...x.provider, temperature: num(e.target.value) } }))} /></Row>
         <button className="secondary wide" onClick={testAI}>Test with a sample message</button>
         {test && <p className="reply">{test}</p>}
