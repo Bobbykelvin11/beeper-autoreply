@@ -1,0 +1,15 @@
+# Beeper Server (Beeper's official headless app: runs the WhatsApp/Telegram/... bridges on this machine).
+FROM debian:bookworm-slim
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl jq libstdc++6 tar gzip \
+ && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    case "${TARGETARCH:-$(dpkg --print-architecture)}" in arm64) A=arm64;; *) A=x64;; esac; \
+    URL="$(curl -fsSL "https://api.beeper.com/desktop/update-feed.json?bundleID=com.automattic.beeper.server&platform=linux&channel=stable&arch=$A" | jq -r .url)"; \
+    mkdir /opt/beeper && curl -fsSL "$URL" | tar -xz -C /opt/beeper; \
+    ln -s "$(find /opt/beeper -type f -name beeper-server | head -n1)" /usr/local/bin/beeper-server; \
+    useradd --create-home --uid 1000 beeper || true; mkdir -p /data && chown beeper /data
+USER beeper
+ENV BEEPER_SERVER_DATA_DIR=/data
+VOLUME /data
+CMD ["beeper-server", "--host=127.0.0.1", "--port=23374", "--data-dir=/data"]

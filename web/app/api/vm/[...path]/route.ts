@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { findServerURL } from '@/lib/rendezvous'
 import { COOKIE, cookieOptions, seal, unseal } from '@/lib/session'
-import { vmFetch } from '@/lib/vm'
+import { clientIPOf, vmFetch } from '@/lib/vm'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -17,7 +17,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   let vmURL = session.vmURL
   let upstream: Response | null = null
   try {
-    upstream = await vmFetch(vmURL, session.secret, target, init)
+    upstream = await vmFetch(vmURL, session.secret, target, init, clientIPOf(req))
   } catch {
     upstream = null
   }
@@ -27,7 +27,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     if (fresh && fresh !== vmURL) {
       vmURL = fresh
       try {
-        upstream = await vmFetch(vmURL, session.secret, target, init)
+        upstream = await vmFetch(vmURL, session.secret, target, init, clientIPOf(req))
       } catch {
         upstream = null
       }
