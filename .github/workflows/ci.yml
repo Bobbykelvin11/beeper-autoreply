@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n setup/oracle-bootstrap.sh && bash -n setup/update.sh && bash -n setup/smoke-test.sh
+      - run: bash -n setup/oracle-bootstrap.sh && bash -n setup/gcp-bootstrap.sh && bash -n setup/update.sh && bash -n setup/smoke-test.sh
       - run: shellcheck -S warning setup/*.sh
   stack:
     runs-on: ubuntu-latest

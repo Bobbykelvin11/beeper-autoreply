@@ -1,3 +1,5 @@
+> **Recommended path:** use the [Google Cloud Always Free e2-micro guide](README-gcp-phone.md) if you can. This Oracle guide is kept for anyone who already has an Oracle account.
+
 # Set up Beeper Auto-Reply from your iPhone (everything on one free Oracle VM)
 
 You need: an iPhone with Safari, a credit/debit card for Oracle's identity check (the Always Free VM costs nothing), and about 45 minutes. No laptop.
