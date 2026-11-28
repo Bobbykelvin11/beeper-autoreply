@@ -1,116 +1,91 @@
-# Set it up from your iPhone (no laptop)
+# Set up Beeper Auto-Reply from your iPhone (everything on one free Oracle VM)
 
-Everything here is done in Safari on your iPhone. It takes about 30–45 minutes, most of it waiting.
-**Never paste passwords, codes or keys into a chat with anyone, AI bots included.** You only type them into the Oracle website, the control page, or the WhatsApp/Telegram/Beeper apps.
+You need: an iPhone with Safari, a credit/debit card for Oracle's identity check (the Always Free VM costs nothing), and about 45 minutes. No laptop.
 
-You need:
-- your iPhone with the **Beeper** app signed in (for the emoji check);
-- a bank card (Oracle uses it to check you're a real person; Always Free resources cost $0);
-- an email address for Oracle.
+At the end you have a web app on your Home Screen. It runs on your own VM with a free HTTPS address, links to your WhatsApp, Telegram and other chats, and drafts or sends AI replies.
 
----
+## 1. Oracle account
 
-## 1. Create a free Oracle Cloud account
+1. Open **cloud.oracle.com** in Safari.
+2. **Already have an account?** Tap **Sign in**, enter your *Cloud Account Name* (your tenancy name), then your username and password. Skip to step 2.
+3. **New?** Tap **Sign up** or **Try for free**, then fill in email, name and country. Verify the email, then choose a **home region**: pick one close to you. You can't change it later.
+4. Enter the card for verification (a small temporary hold, later reversed) and your phone number for the code. Activation takes anywhere from a few minutes to a few hours, and Oracle emails you when it's ready.
 
-1. Open **https://signup.cloud.oracle.com** in Safari.
-2. Fill in your country, name and email, then verify your email.
-3. **Home region**: pick the one closest to you. It can't be changed later. Busy regions sometimes run out of free ARM servers; if that happens, see Problems below.
-4. Add the card for verification. Choose the **Free Tier / Always Free** account (don't upgrade to Pay As You Go).
-5. Wait for the "Your account is ready" email, then sign in at **https://cloud.oracle.com**.
+## 2. Create the VM
 
-## 2. Choose your access key
+1. In the Oracle console tap **☰** (top left), then **Compute**, then **Instances**, then **Create instance**.
+2. **Name:** `beeper-bot`.
+3. **Image and shape:** tap **Edit**, then **Change image**, then choose **Canonical Ubuntu 24.04** (22.04 is fine too). Tap **Change shape**, choose **Ampere**, tick **VM.Standard.A1.Flex**, and set **2 OCPUs and 12 GB memory** (free allowance: up to 4 OCPUs and 24 GB in total).
+   - If you see **"Out of capacity"**, wait a few hours and try again, or try another *Availability domain* under Placement. Free ARM servers are popular.
+   - Fallback: **AMD VM.Standard.E2.1.Micro** (1 GB memory). It works, but it's slow, and the first install can take 30+ minutes. The free local AI (Ollama) won't fit, so you'll use a free Groq key instead.
+4. **Networking:** leave the defaults (a new virtual cloud network and public subnet) and make sure **Automatically assign public IPv4 address** is on.
+5. **SSH keys:** choose **No SSH keys** (you won't need them).
+6. **Boot volume:** the default is fine.
+7. Tap **Show advanced options**, then the **Management** tab, find **Cloud-init script** and choose **Paste cloud-init script**. Paste these three lines. **Change `CHANGE-ME-to-your-own-key` to your own access key first**, using 12 or more letters, numbers, `-` or `_` and no spaces. This key is your sign-in password for the app; remember it.
 
-Make up a long private phrase of **12 characters or more**, for example `purple-lagos-river-2026-zebra`. Save it in your iPhone Passwords app or Notes. It's the password for your control page and the key the server uses to encrypt its address.
+```
+#!/bin/bash
+export CONTROL_SECRET=CHANGE-ME-to-your-own-key
+curl -fsSL https://raw.githubusercontent.com/Bobbykelvin11/beeper-autoreply/main/setup/oracle-bootstrap.sh | bash
+```
 
-## 3. Create the server (VM) and paste the setup script
+8. Tap **Create**. Wait until the instance status says **Running** (about 2 minutes). The installer then keeps working on the VM for roughly 10 to 25 minutes.
 
-1. In the Oracle console, tap the menu (☰) → **Compute** → **Instances** → **Create instance**.
-2. **Name**: `beeper-autoreply`.
-3. **Image and shape** → **Edit**:
-   - **Image**: *Change image* → **Canonical Ubuntu** → **24.04** (22.04 also works) → *Select image*.
-   - **Shape**: *Change shape* → **Ampere** → **VM.Standard.A1.Flex**, **2 OCPUs** and **12 GB memory**. It's marked "Always Free-eligible". → *Select shape*.
-4. **Networking**: keep the defaults. *Create new virtual cloud network* and *Assign a public IPv4 address* must be on, so the server can reach the internet.
-5. **Add SSH keys**: choose **Generate a key pair for me** and tap *Save private key* (it goes to Files). You probably won't need it, but keep it.
-6. Scroll down → **Show advanced options** → **Management** tab → **Initialization script** → **Paste cloud-init script**.
-7. In a new Safari tab open
-   **https://raw.githubusercontent.com/Bobbykelvin11/beeper-autoreply/main/setup/cloud-init.sh**
-   then long-press the text → **Select All** → **Copy**.
-8. Go back to the Oracle tab and paste it into the box. Near the top, **edit this line**:
-   ```
-   CONTROL_SECRET="CHANGE-ME-to-a-long-private-phrase"
-   ```
-   Replace the text between the quotes with your access key from step 2. Leave everything else as is:
-   - `INSTALL_OLLAMA="yes"` gives you a free open-source AI on the server;
-   - `TUNNEL="cloudflare"` needs no account.
-9. Tap **Create**. Wait until the instance says **Running**, then give it **10–15 more minutes** to install everything. The AI model keeps downloading in the background for a few more minutes.
+The installer generates a random session key on the VM. You never see it and it isn't stored anywhere else.
 
-## 4. Open the control page
+## 3. Open ports 80 and 443
 
-1. Open the control page link you were given (your Vercel address, for example `https://beeper-autoreply-xxxx.vercel.app`).
-2. Tap **Share** → **Add to Home Screen**. From now on, open it from the **Auto-Reply** icon.
-3. Type your **access key** and tap **Sign in**. The page finds your server automatically. If it says it can't find the server, wait 2 minutes and try again.
+Without this the page won't load. Oracle blocks all web traffic until you allow it.
 
-## 5. Link your Beeper account (Link tab)
+1. On the instance page, scroll to **Instance information** (or tap the **Networking** tab), then tap the **Subnet** link (named like `subnet-2026…`).
+2. Tap the **Security** tab, then tap **Default Security List for vcn-…**.
+3. Tap **Security rules**, then **Add Ingress Rules**.
+4. Enter **Source CIDR** `0.0.0.0/0`, **IP Protocol** `TCP`, and **Destination Port Range** `443`. Tap **+ Another Ingress Rule** and add the same with `80`. Tap **Add Ingress Rules**.
 
-1. **Beeper account** → type your Beeper email → **Send code**.
-2. Open the email from Beeper, then type the code into the page → **Sign in**.
-3. Tap **Start verification**. Your Beeper iPhone app asks you to verify a new login: tap **Accept**.
-4. Emoji appear on both screens. If they're the same, tap **They match** on the page and confirm in the Beeper app.
-   - No prompt in the Beeper app? Tap **Use my recovery code instead** and type your Beeper recovery code.
-5. The card shows **linked** when it's done.
+## 4. Find the address and open the app
 
-## 6. Connect WhatsApp and Telegram on the server (Link tab → Chat apps)
+1. On the instance page, copy the **Public IP address**, for example `129.146.10.20`.
+2. Replace the dots with dashes and add `.sslip.io`: **`https://129-146-10-20.sslip.io`**.
+3. Open it in Safari. If it says it can't connect, the installer is still running. Wait 5 minutes and refresh; the first install can take up to 25 minutes (30+ on the AMD micro). The certificate is issued automatically when the page first comes up.
+4. Sign in with your access key. Then tap **Share**, then **Add to Home Screen**, to install the app.
 
-Your server is a new "device", so connect each app there once. Use the ones marked **on this server**.
+## 5. Link your Beeper account
 
-**WhatsApp (pairing code, no second phone needed)**
-1. Tap **Connect** next to WhatsApp. If it asks *how to sign in*, choose the **phone number / pairing code** option.
-2. Type your WhatsApp number with country code (e.g. `+234…`). The page shows an **8-character code**.
-3. Open WhatsApp on your iPhone → **Settings** → **Linked Devices** → **Link a Device** → **Link with phone number instead**, and type the code.
-4. The page says **Connected!** WhatsApp lets you link up to 4 devices, so this uses one slot.
-   - If WhatsApp only offers a **QR code**, you can't scan your own screen. Open the control page on another screen (a friend's phone, a computer or a tablet) and scan that QR with your iPhone's WhatsApp → Linked Devices.
+In the app, open the **Link** tab.
 
-**Telegram**
-1. Tap **Connect** next to Telegram and type your phone number with country code.
-2. Telegram sends a login code inside the Telegram app. Type it into the page.
-3. If you have a Telegram cloud password (2-step verification), the page asks for it next.
+1. Enter the email of your Beeper account. Beeper emails you a code; type it in. (Don't have a Beeper account? Create one free in the Beeper app first.)
+2. Beeper asks you to verify the new "device". Open the Beeper app on your iPhone and accept the verification request, comparing the emoji, or use your recovery code instead if the app offers it.
 
-Other apps (Instagram, Messenger, Discord, LinkedIn…) sign in with browser cookies. That's hard on an iPhone, so start with WhatsApp and Telegram.
+## 6. Connect your chat apps
 
-## 7. Choose chats and modes (Chats tab)
+Still in the **Link** tab, under **Connect chat apps**:
 
-- Turn on the switch for each chat the bot may answer. **Nothing is answered until you allow it.**
-- Under each allowed chat, pick **Default**, **Approve** or **Automatic**. *Default* follows the setting on the Home tab.
-- Tap a chat's name to add instructions, e.g. "This is my mom. Be sweet, reply in Yoruba."
+- **WhatsApp:** tap WhatsApp. The app shows a **QR code**, and WhatsApp needs a *different* device's camera to scan it.
+  - Open your app page on a second screen (another phone, tablet or computer), show the QR there, then on your iPhone tap **WhatsApp → Settings → Linked devices → Link a device** and scan it. This is the part of setup that needs a second screen.
+  - If the app offers a **phone number / pairing code** option, choose that instead. Then on your iPhone tap **Link a device → Link with phone number instead** and type in the code.
+- **Telegram:** enter your phone number, then the code Telegram sends you in the Telegram app (and your two-step password if you set one).
+- **Instagram, Messenger, Signal, Discord, others:** tap the app and follow the prompts. Some use a username and password, and some use a QR. Meta apps (Instagram and Messenger) are more likely to block automation, so use them with care.
 
-## 8. Settings
+Chats from apps you set up *on your iPhone's Beeper app* won't appear here. Connect each app again on the server like this.
 
-- **Your voice**: describe how you talk (persona and style).
-- **AI provider**: *Ollama on this server* works with no key. For faster replies, tap **Groq**, create a free key at https://console.groq.com/keys, paste the key **into the Settings page** (never into a chat) and save. Tap **Test with a sample message**.
-- **Quiet hours**, delays and limits: the defaults are safe. Keep the limits low; WhatsApp bans spammy automation.
+## 7. Turn the bot on
 
-## 9. Turn it on (Home tab)
+1. **Settings:** choose your AI. On an ARM VM with 8 GB+ memory, the free built-in AI (Ollama, `qwen2.5:3b`) is already selected; it's downloaded about 5 minutes after install, and replies are slow but private. For better replies, paste a free **Groq** key (console.groq.com/keys) with base URL `https://api.groq.com/openai/v1`. Set your persona and style.
+2. **Chats:** tap refresh, then switch on only the chats you want it to answer. Each chat can be **Approve before send** (default) or **Fully automatic**.
+3. **Home:** switch the master toggle **On**.
+4. **Drafts:** with approve mode, tap **Send**, **Edit** or **Reject**. You can also answer in your Beeper **Note to self** chat: `ok ab12`, `no ab12`, `edit ab12 new text`.
 
-- Turn on **Auto-reply bot**. **Default mode** starts as **Approve**.
-- New drafts show up in the **Approve** tab and in your Beeper **Note to self** chat. Reply there with:
-  - `ok ab12` sends the draft;
-  - `no ab12` rejects it;
-  - `edit ab12 your new text` sends your edited version;
-  - `drafts` lists what's waiting;
-  - `bot off` / `bot on` turns everything off or on.
-- If you reply to someone yourself, the bot drops its draft for that chat.
+## Good to know
 
----
+- **Account risk:** WhatsApp, Instagram and Messenger ban automated messaging. Keep auto mode to a few trusted chats, with delays and rate limits on. Approve mode is the safest.
+- **Weekly updates:** the VM updates itself from this repo every week.
+- **Oracle Always Free** servers can be reclaimed if they sit idle for a long time. This one is busy, but sign in to Oracle now and then.
+- **Don't want sslip.io?** If a certificate error appears (the shared sslip.io name can hit certificate limits), create a free name at **duckdns.org**, then recreate the VM with these extra lines before the `curl` line:
 
-## Problems
+```
+export DUCKDNS_SUBDOMAIN=yourname
+export DUCKDNS_TOKEN=your-duckdns-token
+```
 
-| Problem | Fix |
-| --- | --- |
-| Oracle says **Out of capacity** for A1 | Try another *Availability domain* in the Placement section, try 1 OCPU / 6 GB, or try again later. Last resort: shape **VM.Standard.E2.1.Micro** (AMD, 1 GB) with `INSTALL_OLLAMA="no"` and Groq as the AI. |
-| Control page: "Couldn't find your server" | Wait 2–5 minutes after the VM starts. Check that the access key is exactly the one in the script. Make sure the instance is *Running*. |
-| Control page: "Wrong access key" 5 times | The server blocks guesses for 10 minutes. Wait and retry. |
-| The script failed | In Oracle: instance → **Console connection** → *Launch Cloud Shell connection*, sign in as `ubuntu` with your SSH key, then run `sudo tail -50 /var/log/beeper-autoreply-setup.log`. |
-| Bot not replying | Check the Home tab: Beeper *signed in*, Live messages *connected*, at least 1 allowed chat, bot *On*. The Activity tab shows the reason for each skip. |
-| Oracle stopped the VM ("idle") | Oracle can stop free VMs that sit almost idle for a week. Start it again from Instances. Everything is saved. |
-
-Updates install automatically once a week.
+  and use `https://yourname.duckdns.org`.
+- **Page doesn't load?** Check, in order: the 80 and 443 ingress rules (step 3), that you used `https://`, that you replaced dots with dashes, and that 25 minutes have passed.
