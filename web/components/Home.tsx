@@ -37,6 +37,7 @@ export function Home({ go }: { go: (tab: string) => void }) {
 
   if (!status) return <Card><p className="muted">{error ?? 'Loading…'}</p></Card>
   const ready = status.signedIn && status.events === 'connected'
+  const needsKey = !status.provider.hasKey && !isLocalAI(status.provider.baseURL)
   return (
     <>
       <Card>
@@ -53,10 +54,11 @@ export function Home({ go }: { go: (tab: string) => void }) {
           <li className={status.signedIn ? 'ok' : 'bad'}>Beeper: {status.signedIn ? 'signed in' : 'not linked yet'}{!status.signedIn && <button className="link" onClick={() => go('link')}>Link now</button>}</li>
           <li className={status.events === 'connected' ? 'ok' : 'bad'}>Live messages: {status.events}</li>
           <li className={status.allowedChats ? 'ok' : 'bad'}>Allowed chats: {status.allowedChats}{!status.allowedChats && <button className="link" onClick={() => go('chats')}>Choose chats</button>}</li>
-          <li className={status.provider.baseURL ? 'ok' : 'bad'}>AI: {status.provider.model} <span className="muted">({hostOf(status.provider.baseURL)})</span></li>
+          <li className={needsKey ? 'bad' : (status.provider.baseURL ? 'ok' : 'bad')}>AI: {status.provider.model} <span className="muted">({hostOf(status.provider.baseURL)})</span>{needsKey && <button className="link" onClick={() => go('settings')}>Add a free Groq key</button>}</li>
           <li className={status.noteToSelfChatID ? 'ok' : 'warn'}>Note to self approvals: {status.noteToSelfChatID ? 'ready' : 'chat not found yet'}</li>
         </ul>
         {status.pendingDrafts > 0 && <button className="primary wide" onClick={() => go('drafts')}>{status.pendingDrafts} reply{status.pendingDrafts > 1 ? 'ies' : ''} waiting for you</button>}
+        {needsKey && <p className="muted small">This small VM cannot run a local model. Paste a free Groq API key in Settings (console.groq.com/keys) before you turn the bot on.</p>}
         {!ready && <p className="muted small">Finish the steps in the Link tab first.</p>}
       </Card>
       <p className="muted small center">Server v{status.version}</p>
@@ -69,5 +71,14 @@ function hostOf(u: string): string {
     return new URL(u).host
   } catch {
     return u
+  }
+}
+
+function isLocalAI(u: string): boolean {
+  try {
+    const h = new URL(u).hostname
+    return h === '127.0.0.1' || h === 'localhost'
+  } catch {
+    return false
   }
 }

@@ -117,3 +117,14 @@ test('mergeSettings ignores unknown keys and wrong types', () => {
   assert.equal(s.rateLimits.globalPerHour, 12)
   assert.equal(s.defaultMode, 'auto')
 })
+
+test('default AI provider is Groq, overridable from env', () => {
+  const d = defaultSettings({})
+  assert.equal(d.provider.baseURL, 'https://api.groq.com/openai/v1')
+  assert.equal(d.provider.model, 'openai/gpt-oss-120b')
+  assert.equal(d.provider.apiKey, '')
+  const o = defaultSettings({ AI_BASE_URL: 'http://127.0.0.1:11434/v1', AI_MODEL: 'qwen2.5:3b', AI_API_KEY: 'sk-test' })
+  assert.equal(o.provider.baseURL, 'http://127.0.0.1:11434/v1')
+  assert.equal(o.provider.model, 'qwen2.5:3b')
+  assert.equal(o.provider.apiKey, 'sk-test')
+})

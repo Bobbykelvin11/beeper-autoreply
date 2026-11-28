@@ -48,8 +48,8 @@ services:
       BEEPER_BASE_URL: http://127.0.0.1:23374
       PUBLIC_URL: https://${DOMAIN}
       NTFY_URL: "off"
-      AI_BASE_URL: ${AI_BASE_URL:-http://127.0.0.1:11434/v1}
-      AI_MODEL: ${AI_MODEL:-qwen2.5:3b}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.groq.com/openai/v1}
+      AI_MODEL: ${AI_MODEL:-openai/gpt-oss-120b}
       AI_API_KEY: ${AI_API_KEY:-}
     volumes:
       - worker_data:/data

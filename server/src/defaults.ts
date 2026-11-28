@@ -22,9 +22,9 @@ export function defaultSettings(env: NodeJS.ProcessEnv = process.env): Settings 
     delay: { minSeconds: 20, maxSeconds: 90, debounceSeconds: 15, typing: true },
     rateLimits: { perChatPerHour: 6, globalPerHour: 30, minGapSecondsPerChat: 45 },
     provider: {
-      baseURL: env.AI_BASE_URL || 'http://127.0.0.1:11434/v1',
+      baseURL: env.AI_BASE_URL || 'https://api.groq.com/openai/v1',
       apiKey: env.AI_API_KEY || '',
-      model: env.AI_MODEL || 'qwen2.5:3b',
+      model: env.AI_MODEL || 'openai/gpt-oss-120b',
       temperature: 0.7,
     },
     noteToSelf: { enabled: true, chatID: '' },
