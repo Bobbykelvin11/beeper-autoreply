@@ -8,43 +8,41 @@ An AI bot that keeps your conversations going and replies to your messages on Wh
 - **Fully automatic**: the reply goes out by itself after a human-like delay, within rate limits.
 
 ```
- iPhone (Safari PWA)                  Vercel (web/)                     Oracle Always Free VM
-┌──────────────────┐  HTTPS   ┌─────────────────────────┐  HTTPS  ┌─────────────────────────────────┐
-│ Control page     │ ───────▶ │ Next.js page + /api/vm  │ ──────▶ │ cloudflared quick tunnel        │
-│ on/off, chats,   │  cookie  │ proxy (secret kept in   │ bearer  │   └▶ server/ worker :8787       │
-│ modes, approvals │          │ an encrypted cookie)    │         │        ├ Beeper Server :23374   │
-└──────────────────┘          └─────────────────────────┘         │        │  (WhatsApp, Telegram…) │
-        ▲                              ▲  encrypted URL           │        └ AI: Ollama / Groq / …  │
-        │  Note to self commands       └──── ntfy.sh ◀────────────┘  (tunnel URL rendezvous)      │
-        └─────────────── Beeper app ◀─────────────────────────────────────────────────────────────┘
+ iPhone (Safari, Home Screen app)         One Oracle Always Free VM (docker compose)
+┌──────────────────┐   HTTPS   ┌────────────────────────────────────────────────────────┐
+│ Control page     │ ────────▶ │ Caddy :443 (free cert for <ip>.sslip.io)               │
+│ on/off, chats,   │           │   └▶ web/  Next.js control page (key in encrypted cookie)│
+│ modes, approvals │           │        └▶ server/ worker API (private network)         │
+└──────────────────┘           │             ├ Beeper Server (WhatsApp, Telegram, …)    │
+        ▲                      │             └ AI: Ollama on the VM, or Groq/OpenRouter │
+        │ Note to self commands└────────────────────────────────────────────────────────┘
+        └─────────────── Beeper app
 ```
 
 | Folder | What it is |
 | --- | --- |
 | [`server/`](server) | Node/TypeScript worker. It connects to the local Beeper Server (Desktop API + WebSocket), applies the allowlist, quiet hours, delays and rate limits, asks an OpenAI-compatible AI for a reply, and keeps drafts and logs. It also exposes a small authenticated control API. |
-| [`web/`](web) | Next.js control page for Vercel. It's password protected, installable as a PWA, and proxies to the VM. |
-| [`setup/`](setup) | [`cloud-init.sh`](setup/cloud-init.sh) is a one-shot VM installer. [`README-phone.md`](setup/README-phone.md) has step-by-step instructions you can follow on an iPhone. |
+| [`web/`](web) | Next.js control page: password protected, installable as a PWA, proxies to the worker. |
+| [`setup/`](setup) | [`oracle-bootstrap.sh`](setup/oracle-bootstrap.sh) installs everything on a fresh VM. [`README-phone.md`](setup/README-phone.md) has step-by-step instructions you can follow on an iPhone. |
+| root | `docker-compose.yml` and `Caddyfile`: the whole stack (Caddy, web, Beeper Server, worker, optional Ollama). |
 
 ## How it works
 
-1. **Beeper Server** is Beeper's official headless app (installed with the [`beeper` CLI](https://github.com/beeper/cli)). It runs on the VM, so WhatsApp and Telegram connect to it directly as an *on-device* connection. Chats you set up as on-device on your iPhone are **not** visible to the server, so connect the networks again on the server from the Link tab.
+1. **Beeper Server** is Beeper's official headless app (downloaded by `server/Dockerfile.beeper`). It runs on the VM, so WhatsApp and Telegram connect to it directly as an *on-device* connection. Chats you set up as on-device on your iPhone are **not** visible to the server, so connect the networks again on the server from the Link tab.
 2. The worker subscribes to `ws://127.0.0.1:23374/v1/ws` for `message.upserted` events. For each incoming text message in an **allowed** chat it does the following:
    - waits a few seconds for follow-up messages;
    - fetches the last N messages for context;
    - builds a prompt from your persona and style plus any per-chat instructions;
    - creates a draft or schedules an automatic send.
    If you reply by hand, anything queued for that chat is cancelled. The AI can answer `[[SKIP]]` for messages that need the real you, such as money, plans or anything sensitive; then you get a notice instead of a reply.
-3. **Reaching the server:** a Cloudflare quick tunnel needs no account, but its URL changes when the VM restarts.
-   - The worker publishes the current URL to an ntfy.sh topic. Both the topic name and the AES-256-GCM key are derived from your access key, so ntfy only sees ciphertext.
-   - The control page looks the URL up with the same key, so you never copy URLs around.
-   - Alternative: Tailscale Funnel gives a fixed URL. Set `TUNNEL="tailscale"` in the script.
-4. **Linking Beeper:** you type your Beeper email, then the emailed code, into the control page. Then you confirm the new "device" by matching emoji in the Beeper app on your iPhone, or with your recovery code. Passwords are never needed or stored. The Beeper access token stays on the VM (`/var/lib/beeper-autoreply/secrets.json`, mode 600).
+3. **Reaching the server:** Caddy serves the control page on `https://<ip-with-dashes>.sslip.io` (or a DuckDNS name) with an automatic certificate. Only ports 80/443 are open; the worker API, Beeper Server and Ollama are not reachable from outside. The access key is checked by the worker, and wrong guesses are rate-limited per client address. The (optional) Cloudflare/ntfy rendezvous code in the repo is not used in this setup.
+4. **Linking Beeper:** you type your Beeper email, then the emailed code, into the control page. Then you confirm the new "device" by matching emoji in the Beeper app on your iPhone, or with your recovery code. Passwords are never needed or stored. The Beeper access token stays on the VM (a Docker volume, mode 600).
 
 ## AI providers (all OpenAI-compatible)
 
 | Provider | Cost | Notes |
 | --- | --- | --- |
-| Ollama on the VM (default when `INSTALL_OLLAMA="yes"`) | free, open source | `qwen2.5:3b` runs on the free ARM VM; slower, private |
+| Ollama on the VM (default on ARM VMs with 8 GB+ RAM) | free, open source | `qwen2.5:3b` runs on the free ARM VM; slower, private |
 | [Groq](https://console.groq.com/keys) | free tier | fast; e.g. `openai/gpt-oss-120b` |
 | [OpenRouter](https://openrouter.ai/keys) | free models | `…:free` models |
 | [Gemini](https://aistudio.google.com/apikey) | free tier | base URL `https://generativelanguage.googleapis.com/v1beta/openai` |
@@ -70,12 +68,12 @@ node scripts/mock-beeper.mjs                      # fake Beeper Server + fake AI
 CONTROL_SECRET=dev-secret-123456 BEEPER_BASE_URL=http://127.0.0.1:23999 AI_BASE_URL=http://127.0.0.1:23998/v1 NTFY_URL=off npm start
 
 cd web && npm ci && npm run lint && npm test && npm run build
-SESSION_KEY=dev-session-key-0123456789 VM_URL=http://127.0.0.1:8787 npm run dev
+SESSION_KEY=dev-session-key-0123456789 NTFY_URL=off VM_URL=http://127.0.0.1:8787 npm run dev
 ```
 
-### Deploying the control page to Vercel
+### Deploying
 
-Import this repo in Vercel with **Root Directory = `web`**, and set `SESSION_KEY` to a random 32+ character string. You can leave `VM_URL` empty for the quick-tunnel rendezvous, or set it to a fixed Tailscale/Cloudflare URL. No database is needed.
+See [`setup/README-phone.md`](setup/README-phone.md). On any Ubuntu box with Docker: create `.env` from `.env.example`, then `docker compose up -d --build`. `setup/smoke-test.sh` runs the whole stack with a self-signed certificate (CI does this).
 
 ### Control API (VM, `Authorization: Bearer <CONTROL_SECRET>`)
 

@@ -29,5 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n setup/cloud-init.sh && bash -n setup/update.sh
-      - run: shellcheck -S warning setup/cloud-init.sh setup/update.sh
+      - run: bash -n setup/oracle-bootstrap.sh && bash -n setup/update.sh && bash -n setup/smoke-test.sh
+      - run: shellcheck -S warning setup/*.sh
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash setup/smoke-test.sh
