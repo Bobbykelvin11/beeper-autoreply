@@ -1,0 +1,73 @@
+# Everything on one machine: HTTPS front door (Caddy) -> control page (web) -> worker API.
+# The worker and Ollama share Beeper Server's network namespace, so they talk over 127.0.0.1 and
+# nothing but Caddy (80/443) is reachable from the internet.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    environment:
+      SESSION_KEY: ${SESSION_KEY:?set SESSION_KEY in .env}
+      VM_URL: http://beeper:8787
+      NTFY_URL: "off"
+
+  beeper:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.beeper
+    restart: unless-stopped
+    volumes:
+      - beeper_data:/data
+
+  worker:
+    build: ./server
+    restart: unless-stopped
+    network_mode: "service:beeper"
+    depends_on:
+      - beeper
+    environment:
+      CONTROL_SECRET: ${CONTROL_SECRET:?set CONTROL_SECRET in .env}
+      HOST: 0.0.0.0
+      PORT: "8787"
+      DATA_DIR: /data
+      BEEPER_BASE_URL: http://127.0.0.1:23374
+      PUBLIC_URL: https://${DOMAIN}
+      NTFY_URL: "off"
+      AI_BASE_URL: ${AI_BASE_URL:-http://127.0.0.1:11434/v1}
+      AI_MODEL: ${AI_MODEL:-qwen2.5:3b}
+      AI_API_KEY: ${AI_API_KEY:-}
+    volumes:
+      - worker_data:/data
+
+  # Optional free local AI. Enabled with COMPOSE_PROFILES=ollama in .env.
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    network_mode: "service:beeper"
+    depends_on:
+      - beeper
+    volumes:
+      - ollama_models:/root/.ollama
+
+volumes:
+  caddy_data:
+  caddy_config:
+  beeper_data:
+  worker_data:
+  ollama_models:
